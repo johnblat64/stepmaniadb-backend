@@ -12,7 +12,6 @@ import (
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackskj/carta"
 	"go.uber.org/zap"
 )
 
@@ -39,7 +38,50 @@ type packAddFromDownloadLinkRequest struct {
 	DownloadLink string `json:"downloadLink"`
 }
 
-func getListOfSongsFromSearchParameters(c *gin.Context) {
+type Whatever struct {
+	X []byte `db:"song_chart_json"`
+}
+
+func getSongList2(c *gin.Context) {
+	sqlSelectBuilder := sqlBuilder.NewSelectBuilder()
+
+	sqlSelectBuilder.Select("song_chart_json")
+	sqlSelectBuilder.From("filtered_songs_with_charts('',0,999,4,4,'','pump-single',	0, 99, '')")
+
+	sqlQuery, _ := sqlSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
+
+	rows, err := gDbConnection.Query(context.Background(), sqlQuery)
+	if err != nil {
+		gSugar.Error(err)
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if rows.Err() != nil {
+		gSugar.Error(err)
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	defer rows.Close()
+
+	var whatever Whatever
+	var whateverStruct = sqlBuilder.NewStruct(new(Whatever))
+
+	rows.Next()
+	if rows.Err() != nil {
+		gSugar.Error(err)
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	err = rows.Scan(whateverStruct.Addr(&whatever)...)
+	if err != nil {
+		gSugar.Error(err)
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	// json.Marshal(whatever.X)
+	c.Data(http.StatusOK, "application/json", whatever.X)
+	//c.IndentedJSON()
 
 }
 
@@ -99,39 +141,6 @@ var queryParamTextFilters = []string{
 
 const DEFAULT_COUNT = "20"
 
-type TimeSignature struct {
-	Numerator   int `json:"numerator"  db:"song.timesignature.numerator"`
-	Denominator int `json:"denominator" db:"song.timesignature.denominator"`
-}
-
-type Chart struct {
-	ChartId      string `json:"chartId" db:"chart.chartid"`
-	ChartName    string `json:"name" db:"chart.chartname"`
-	StepsType    string `json:"stepsType" db:"chart.stepstype"`
-	Description  string `json:"description" db:"chart.description"`
-	ChartStyle   string `json:"chartStyle" db:"chart.chartstyle"`
-	Difficulty   string `json:"difficulty" db:"chart.difficulty"`
-	Meter        int    `json:"meter" db:"chart.meter"`
-	Credit       string `json:"credit" db:"chart.credit"`
-	StopsCount   int    `json:"stopsCount" db:"chart.stops_count"`
-	DelaysCount  int    `json:"delaysCount" db:"chart.delays_count"`
-	WarpsCount   int    `json:"warpsCount" db:"chart.warps_count"`
-	ScrollsCount int    `json:"scrollsCount" db:"chart.scrolls_count"`
-	FakesCount   int    `json:"fakesCount" db:"chart.fakes_count"`
-	SpeedsCount  int    `json:"speedsCount" db:"chart.speeds_count"`
-}
-
-type Song struct {
-	SongId         string          `json:"songId"         db:"song.songid"`
-	SongTitle      string          `json:"songTitle"      db:"song.title"`
-	SongArtist     string          `json:"songArtist"     db:"song.artist"`
-	PackId         string          `json:"packId"         db:"pack.packid"`
-	PackName       string          `json:"packName"       db:"pack.name"`
-	Bpms           []float32       `json:"bpms"           db:"song.bpms"`
-	TimeSignatures []TimeSignature `json:"timeSignatures" db:"song.timesignatures"`
-	Charts         []Chart
-}
-
 // https://github.com/jackskj/carta
 
 var songEntryStruct = sqlBuilder.NewStruct(new(Song))
@@ -181,8 +190,6 @@ func getSongList(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	songs := []Song{}
-	carta.Map(rows, &songs)
 	var songEntries []Song
 	if rows.Err() != nil {
 		gSugar.Error(err)
@@ -238,8 +245,12 @@ func main() {
 
 	gSugar.Info("Connecting to DB " + dbName + "...")
 
-	gDbConnection, err = pgx.Connect(context.Background(),
-		"user="+dbUser+" dbname="+dbName+" password="+dbPass+" host="+dbHost)
+	// connConfig, err := pgx.ParseConfig("user=" + dbUser + " dbname=" + dbName + " password=" + dbPass + " host=" + dbHost)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	gDbConnection, err = pgx.Connect(context.Background(), "user="+dbUser+" dbname="+dbName+" password="+dbPass+" host="+dbHost)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -267,6 +278,6 @@ func main() {
 	router := gin.Default()
 	// router.GET("/exampleList", getExampleList)
 	// router.POST("example", postExample)
-	router.GET("songList", getSongList)
+	router.GET("songList", getSongList2)
 	router.Run()
 }
