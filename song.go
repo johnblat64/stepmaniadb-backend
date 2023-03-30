@@ -22,7 +22,7 @@ type Chart struct {
 	SpeedsCount  int    `json:"speedsCount" db:"chart.speeds_count"`
 }
 
-type Song struct {
+type SongRow struct {
 	SongId         string          `json:"songId"         db:"song.songid"`
 	SongTitle      string          `json:"songTitle"      db:"song.title"`
 	SongArtist     string          `json:"songArtist"     db:"song.artist"`
@@ -30,5 +30,5 @@ type Song struct {
 	PackName       string          `json:"packName"       db:"pack.name"`
 	Bpms           []float32       `json:"bpms"           db:"song.bpms"`
 	TimeSignatures []TimeSignature `json:"timeSignatures" db:"song.timesignatures"`
-	Charts         []Chart
+	//Charts         []Chart
 }

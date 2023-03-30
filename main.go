@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
@@ -42,7 +40,9 @@ type Whatever struct {
 	X []byte `db:"song_chart_json"`
 }
 
-func getSongList2(c *gin.Context) {
+const DEFAULT_COUNT = "20"
+
+func getFilteredSongs(c *gin.Context) {
 	sqlSelectBuilder := sqlBuilder.NewSelectBuilder()
 
 	sqlSelectBuilder.Select("song_chart_json")
@@ -68,7 +68,7 @@ func getSongList2(c *gin.Context) {
 
 	rows.Next()
 	if rows.Err() != nil {
-		gSugar.Error(err)
+		gSugar.Error(rows.Err())
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -82,7 +82,76 @@ func getSongList2(c *gin.Context) {
 	// json.Marshal(whatever.X)
 	c.Data(http.StatusOK, "application/json", whatever.X)
 	//c.IndentedJSON()
+}
 
+type SongsResponse struct {
+	SongId         string          `json:"songId"         db:"song.songid"`
+	SongTitle      string          `json:"songTitle"      db:"song.title"`
+	SongArtist     string          `json:"songArtist"     db:"song.artist"`
+	PackId         string          `json:"packId"         db:"pack.packid"`
+	PackName       string          `json:"packName"       db:"pack.name"`
+	Bpms           []float32       `json:"bpms"           db:"song.bpms"`
+	TimeSignatures []TimeSignature `json:"timeSignatures" db:"song.timesignatures"`
+	Charts         []Chart         `json:"charts"`
+}
+
+func getSongById(c *gin.Context) {
+	songid := c.Param("songid")
+
+	sqlSongSelectBuilder := sqlBuilder.NewSelectBuilder()
+	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, pack.packid, pack.name, song.bpms, song.timesignatures")
+	sqlSongSelectBuilder.From("song")
+	sqlSongSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
+	sqlSongSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
+	sqlSongSelectBuilder.Where("song.songid='" + songid + "'")
+	sqlSongQuery, _ := sqlSongSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
+
+	var songRow SongRow
+	var charts []Chart
+	songStruct := sqlBuilder.NewStruct(new(SongRow))
+
+	row := gDbConnection.QueryRow(context.Background(), sqlSongQuery)
+
+	err := row.Scan(songStruct.Addr(&songRow)...)
+	if err != nil {
+		log.Println(err)
+	}
+
+	sqlChartSelectBuilder := sqlBuilder.NewSelectBuilder()
+	sqlChartSelectBuilder.Select("chartid, chartname, stepstype,  description, chartstyle,   difficulty, meter, credit, stops_count, delays_count, warps_count, scrolls_count, fakes_count, speeds_count")
+	sqlChartSelectBuilder.From("chart")
+	sqlChartSelectBuilder.Where("chart.songid='" + songid + "'")
+	sqlChartQuery, _ := sqlChartSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
+
+	rows, err := gDbConnection.Query(context.Background(), sqlChartQuery)
+	defer rows.Close()
+	if rows.Err() != nil {
+		log.Println(rows.Err())
+	}
+	for rows.Next() {
+		var chart Chart
+		chartStruct := sqlBuilder.NewStruct(new(Chart))
+		err := rows.Scan(chartStruct.Addr(&chart)...)
+		if rows.Err() != nil {
+			log.Println(rows.Err())
+		}
+		if err != nil {
+			log.Println(err)
+		}
+		charts = append(charts, chart)
+	}
+
+	songResponse := SongsResponse{
+		SongId:         songRow.SongId,
+		SongTitle:      songRow.SongTitle,
+		SongArtist:     songRow.SongArtist,
+		PackId:         songRow.PackId,
+		PackName:       songRow.PackName,
+		Bpms:           songRow.Bpms,
+		TimeSignatures: songRow.TimeSignatures,
+		Charts:         charts,
+	}
+	c.JSON(200, songResponse)
 }
 
 /**
@@ -94,125 +163,6 @@ func getSongList2(c *gin.Context) {
  */
 func postPackAddFromDownloadLinkRequest(c *gin.Context) {
 
-}
-
-type example struct {
-	Name     string  `json:"name"`
-	Number   int     `json:"number"`
-	IsCool   bool    `json:"isCool"`
-	PriceMax float32 `json:"priceMax"`
-	PriceMin float32 `json:"priceMin"`
-}
-
-var examples = []example{
-	{Name: "Booger", Number: 1, IsCool: true, PriceMin: 5, PriceMax: 10},
-}
-
-func postExample(c *gin.Context) {
-	var newExample example
-
-	if err := c.BindJSON(&newExample); err != nil {
-		return
-	}
-
-	examples = append(examples, newExample)
-	c.IndentedJSON(http.StatusCreated, newExample)
-}
-
-// var validQueryParams = []string{
-// 	"name",
-// 	"number",
-// 	"isCool",
-// 	"priceMax",
-// 	"priceMin",
-// }
-
-var queryParamTextFilters = []string{
-	"songid",
-	"packid",
-	"packname",
-	"title",
-	"version",
-	"subtitle",
-	"artist",
-	"genre",
-	"songcategory",
-}
-
-const DEFAULT_COUNT = "20"
-
-// https://github.com/jackskj/carta
-
-var songEntryStruct = sqlBuilder.NewStruct(new(Song))
-
-func getSongList(c *gin.Context) {
-	sqlSelectBuilder := sqlBuilder.NewSelectBuilder()
-
-	sqlSelectBuilder.Select(
-		"song.songid",
-		"song.title",
-		"song.artist",
-		"pack.packid",
-		"pack.name",
-		"song.bpms",
-		"song.timesignatures",
-		"chart.chartid",
-		"chart.meter")
-
-	// "song.version",
-	// "song.subtitle",
-	// "song.genre",
-	// "song.songcategory",)
-
-	sqlSelectBuilder.From("song")
-	sqlSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
-	sqlSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
-	sqlSelectBuilder.Join("chart", "chart.songid = song.songid")
-	sqlSelectBuilder.GroupBy("song.songid", "pack.packid")
-	countStr := c.DefaultQuery("count", DEFAULT_COUNT)
-	count, err := strconv.Atoi(countStr)
-	if err != nil {
-		return
-	}
-	sqlSelectBuilder.Limit(count)
-	for _, queryParam := range queryParamTextFilters {
-		if value, exists := c.GetQuery(queryParam); exists {
-			sqlSelectBuilder.Where(strings.ToLower(queryParam) + "='" + value + "'")
-		}
-	}
-
-	sqlQuery, _ := sqlSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
-	rows, err := gDbConnection.Query(context.Background(), sqlQuery)
-	if err != nil {
-		gSugar.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	defer rows.Close()
-
-	var songEntries []Song
-	if rows.Err() != nil {
-		gSugar.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	for rows.Next() {
-		var songEntry Song
-		err := rows.Scan(songEntryStruct.Addr(&songEntry)...)
-		if err != nil {
-			gSugar.Error(err)
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-		songEntries = append(songEntries, songEntry)
-	}
-
-	c.IndentedJSON(http.StatusOK, songEntries)
-
-}
-
-func getExampleList(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, examples)
 }
 
 func main() {
@@ -278,6 +228,7 @@ func main() {
 	router := gin.Default()
 	// router.GET("/exampleList", getExampleList)
 	// router.POST("example", postExample)
-	router.GET("songList", getSongList2)
+	router.GET("songList", getFilteredSongs)
+	router.GET("song/:songid", getSongById)
 	router.Run()
 }
