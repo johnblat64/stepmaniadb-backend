@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
-var gDbConnection *pgx.Conn
+var gDb *sql.DB
+var gPgxConn *pgx.Conn
 var gLogger *zap.Logger
 var gSugar *zap.SugaredLogger
 
@@ -50,7 +52,7 @@ func getFilteredSongs(c *gin.Context) {
 
 	sqlQuery, _ := sqlSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
 
-	rows, err := gDbConnection.Query(context.Background(), sqlQuery)
+	rows, err := gPgxConn.Query(context.Background(), sqlQuery)
 	if err != nil {
 		gSugar.Error(err)
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -110,7 +112,7 @@ func getSongById(c *gin.Context) {
 	var charts []Chart
 	songStruct := sqlBuilder.NewStruct(new(SongRow))
 
-	row := gDbConnection.QueryRow(context.Background(), sqlSongQuery)
+	row := gPgxConn.QueryRow(context.Background(), sqlSongQuery)
 
 	err := row.Scan(songStruct.Addr(&songRow)...)
 	if err != nil {
@@ -123,7 +125,7 @@ func getSongById(c *gin.Context) {
 	sqlChartSelectBuilder.Where("chart.songid='" + songid + "'")
 	sqlChartQuery, _ := sqlChartSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
 
-	rows, err := gDbConnection.Query(context.Background(), sqlChartQuery)
+	rows, err := gPgxConn.Query(context.Background(), sqlChartQuery)
 	defer rows.Close()
 	if rows.Err() != nil {
 		log.Println(rows.Err())
@@ -200,7 +202,7 @@ func main() {
 	// 	log.Fatal(err)
 	// }
 
-	gDbConnection, err = pgx.Connect(context.Background(), "user="+dbUser+" dbname="+dbName+" password="+dbPass+" host="+dbHost)
+	gPgxConn, err = pgx.Connect(context.Background(), "user="+dbUser+" dbname="+dbName+" password="+dbPass+" host="+dbHost)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -211,19 +213,19 @@ func main() {
 	pgtype.NewMap().RegisterDefaultPgType(ts, "timesignature")
 	pgtype.NewMap().RegisterDefaultPgType(_ts, "_timesignature")
 
-	timeSignaturePgType, err := gDbConnection.LoadType(context.Background(), "timesignature")
+	timeSignaturePgType, err := gPgxConn.LoadType(context.Background(), "timesignature")
 	if err != nil {
 		gSugar.Panic(err)
 	}
 
-	gDbConnection.TypeMap().RegisterType(timeSignaturePgType)
+	gPgxConn.TypeMap().RegisterType(timeSignaturePgType)
 
-	timeSignaturePgTypeArray, err := gDbConnection.LoadType(context.Background(), "_timesignature")
+	timeSignaturePgTypeArray, err := gPgxConn.LoadType(context.Background(), "_timesignature")
 	if err != nil {
 		gSugar.Panic(err)
 	}
 
-	gDbConnection.TypeMap().RegisterType(timeSignaturePgTypeArray)
+	gPgxConn.TypeMap().RegisterType(timeSignaturePgTypeArray)
 
 	router := gin.Default()
 	// router.GET("/exampleList", getExampleList)
