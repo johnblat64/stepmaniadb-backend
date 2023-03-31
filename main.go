@@ -9,16 +9,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	sqlBuilder "github.com/huandu/go-sqlbuilder"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackskj/carta"
 	"go.uber.org/zap"
 )
 
 var gDb *sql.DB
-var gPgxConn *pgx.Conn
 var gLogger *zap.Logger
 var gSugar *zap.SugaredLogger
 
+// ~/go/pkg/mod/github.com/jackc/pgx@v3.6.2+incompatible
+// ~/go/pkg/mod/github.com/jackc/pgx/v5@v5.3.1/stdlib
 type songSearchParameters struct {
 	Game                     string `json:"game"`
 	StepsType                string `json:"stepsType"`
@@ -52,7 +54,7 @@ func getFilteredSongs(c *gin.Context) {
 
 	sqlQuery, _ := sqlSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
 
-	rows, err := gPgxConn.Query(context.Background(), sqlQuery)
+	rows, err := gDb.Query(sqlQuery)
 	if err != nil {
 		gSugar.Error(err)
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -101,59 +103,42 @@ func getSongById(c *gin.Context) {
 	songid := c.Param("songid")
 
 	sqlSongSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, pack.packid, pack.name, song.bpms, song.timesignatures")
+	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, pack.packid, pack.name, song.bpms, song.timesignatures, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit, chart.stops_count, chart.delays_count, chart.warps_count, chart.scrolls_count, chart.fakes_count, chart.speeds_count ")
 	sqlSongSelectBuilder.From("song")
 	sqlSongSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
 	sqlSongSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
+	sqlSongSelectBuilder.Join("chart", "chart.songid = song.songid")
 	sqlSongSelectBuilder.Where("song.songid='" + songid + "'")
 	sqlSongQuery, _ := sqlSongSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
 
-	var songRow SongRow
-	var charts []Chart
-	songStruct := sqlBuilder.NewStruct(new(SongRow))
+	// var songRow SongRow
+	// var charts []Chart
 
-	row := gPgxConn.QueryRow(context.Background(), sqlSongQuery)
-
-	err := row.Scan(songStruct.Addr(&songRow)...)
-	if err != nil {
-		log.Println(err)
-	}
-
-	sqlChartSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlChartSelectBuilder.Select("chartid, chartname, stepstype,  description, chartstyle,   difficulty, meter, credit, stops_count, delays_count, warps_count, scrolls_count, fakes_count, speeds_count")
-	sqlChartSelectBuilder.From("chart")
-	sqlChartSelectBuilder.Where("chart.songid='" + songid + "'")
-	sqlChartQuery, _ := sqlChartSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
-
-	rows, err := gPgxConn.Query(context.Background(), sqlChartQuery)
+	rows, err := gDb.Query(sqlSongQuery)
 	defer rows.Close()
-	if rows.Err() != nil {
-		log.Println(rows.Err())
-	}
-	for rows.Next() {
-		var chart Chart
-		chartStruct := sqlBuilder.NewStruct(new(Chart))
-		err := rows.Scan(chartStruct.Addr(&chart)...)
-		if rows.Err() != nil {
-			log.Println(rows.Err())
-		}
-		if err != nil {
-			log.Println(err)
-		}
-		charts = append(charts, chart)
+	if err != nil {
+		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
 	}
 
-	songResponse := SongsResponse{
-		SongId:         songRow.SongId,
-		SongTitle:      songRow.SongTitle,
-		SongArtist:     songRow.SongArtist,
-		PackId:         songRow.PackId,
-		PackName:       songRow.PackName,
-		Bpms:           songRow.Bpms,
-		TimeSignatures: songRow.TimeSignatures,
-		Charts:         charts,
+	songs := []SongRow{}
+
+	err = carta.Map(rows, &songs)
+	if err != nil {
+		gSugar.Errorln(err)
 	}
-	c.JSON(200, songResponse)
+
+	// songResponse := SongsResponse{
+	// 	SongId:         songRow.SongId,
+	// 	SongTitle:      songRow.SongTitle,
+	// 	SongArtist:     songRow.SongArtist,
+	// 	PackId:         songRow.PackId,
+	// 	PackName:       songRow.PackName,
+	// 	Bpms:           songRow.Bpms,
+	// 	TimeSignatures: songRow.TimeSignatures,
+	// 	Charts:         charts,
+	// }
+	c.JSON(200, songs)
 }
 
 /**
@@ -202,35 +187,48 @@ func main() {
 	// 	log.Fatal(err)
 	// }
 
-	gPgxConn, err = pgx.Connect(context.Background(), "user="+dbUser+" dbname="+dbName+" password="+dbPass+" host="+dbHost)
+	connStr := "user=" + dbUser + " dbname=" + dbName + " password=" + dbPass + " host=" + dbHost
+	gDb, err = sql.Open("pgx", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}
+	conn, err := gDb.Conn(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = conn.Raw(func(driverConn any) error {
+		pgxConn := driverConn.(*stdlib.Conn).Conn()
+		var ts TimeSignature
+		var _ts []TimeSignature
+		pgtype.NewMap().RegisterDefaultPgType(ts, "timesignature")
+		pgtype.NewMap().RegisterDefaultPgType(_ts, "_timesignature")
+
+		timeSignaturePgType, err := pgxConn.LoadType(context.Background(), "timesignature")
+		if err != nil {
+			gSugar.Panic(err)
+		}
+
+		pgxConn.TypeMap().RegisterType(timeSignaturePgType)
+
+		timeSignaturePgTypeArray, err := pgxConn.LoadType(context.Background(), "_timesignature")
+		if err != nil {
+			gSugar.Panic(err)
+		}
+
+		pgxConn.TypeMap().RegisterType(timeSignaturePgTypeArray)
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	gSugar.Info("Connection to DB " + dbName + " established!")
-
-	var ts TimeSignature
-	var _ts []TimeSignature
-	pgtype.NewMap().RegisterDefaultPgType(ts, "timesignature")
-	pgtype.NewMap().RegisterDefaultPgType(_ts, "_timesignature")
-
-	timeSignaturePgType, err := gPgxConn.LoadType(context.Background(), "timesignature")
-	if err != nil {
-		gSugar.Panic(err)
-	}
-
-	gPgxConn.TypeMap().RegisterType(timeSignaturePgType)
-
-	timeSignaturePgTypeArray, err := gPgxConn.LoadType(context.Background(), "_timesignature")
-	if err != nil {
-		gSugar.Panic(err)
-	}
-
-	gPgxConn.TypeMap().RegisterType(timeSignaturePgTypeArray)
 
 	router := gin.Default()
 	// router.GET("/exampleList", getExampleList)
 	// router.POST("example", postExample)
-	router.GET("songList", getFilteredSongs)
-	router.GET("song/:songid", getSongById)
+	router.GET("songs", getFilteredSongs)
+	router.GET("songs/:songid", getSongById)
 	router.Run()
 }

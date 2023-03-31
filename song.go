@@ -30,5 +30,5 @@ type SongRow struct {
 	PackName       string          `json:"packName"       db:"pack.name"`
 	Bpms           []float32       `json:"bpms"           db:"song.bpms"`
 	TimeSignatures []TimeSignature `json:"timeSignatures" db:"song.timesignatures"`
-	//Charts         []Chart
+	Charts         []Chart
 }
