@@ -83,31 +83,20 @@ func getFilteredSongs(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	// json.Marshal(whatever.X)
 	c.Data(http.StatusOK, "application/json", whatever.X)
-	//c.IndentedJSON()
-}
-
-type SongsResponse struct {
-	SongId         string          `json:"songId"         db:"song.songid"`
-	SongTitle      string          `json:"songTitle"      db:"song.title"`
-	SongArtist     string          `json:"songArtist"     db:"song.artist"`
-	PackId         string          `json:"packId"         db:"pack.packid"`
-	PackName       string          `json:"packName"       db:"pack.name"`
-	Bpms           []float32       `json:"bpms"           db:"song.bpms"`
-	TimeSignatures []TimeSignature `json:"timeSignatures" db:"song.timesignatures"`
-	Charts         []Chart         `json:"charts"`
 }
 
 func getSongById(c *gin.Context) {
 	songid := c.Param("songid")
 
 	sqlSongSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, pack.packid, pack.name, song.bpms, song.timesignatures, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit, chart.stops_count, chart.delays_count, chart.warps_count, chart.scrolls_count, chart.fakes_count, chart.speeds_count ")
+	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit ")
 	sqlSongSelectBuilder.From("song")
 	sqlSongSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
 	sqlSongSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
 	sqlSongSelectBuilder.Join("chart", "chart.songid = song.songid")
+	sqlSongSelectBuilder.Join("song_bpm", "song_bpm.songid = song.songid")
+	sqlSongSelectBuilder.Join("song_time_signature", "song_time_signature.songid = song.songid")
 	sqlSongSelectBuilder.Where("song.songid='" + songid + "'")
 	sqlSongQuery, _ := sqlSongSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
 
@@ -121,23 +110,13 @@ func getSongById(c *gin.Context) {
 		c.Data(500, "application/text", []byte("Internal Server Error"))
 	}
 
-	songs := []SongRow{}
+	songs := []Song{}
 
 	err = carta.Map(rows, &songs)
 	if err != nil {
 		gSugar.Errorln(err)
 	}
 
-	// songResponse := SongsResponse{
-	// 	SongId:         songRow.SongId,
-	// 	SongTitle:      songRow.SongTitle,
-	// 	SongArtist:     songRow.SongArtist,
-	// 	PackId:         songRow.PackId,
-	// 	PackName:       songRow.PackName,
-	// 	Bpms:           songRow.Bpms,
-	// 	TimeSignatures: songRow.TimeSignatures,
-	// 	Charts:         charts,
-	// }
 	c.JSON(200, songs)
 }
 
