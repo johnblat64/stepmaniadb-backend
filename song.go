@@ -1,9 +1,11 @@
 package main
 
+import "strconv"
+
 type Chart struct {
 	Chartid      string `json:"chartId" `
 	Chartname    string `json:"name" `
-	Stepstype    string `json:"stepsType" `
+	StepsType    string `json:"stepsType" `
 	Description  string `json:"description" `
 	Chartstyle   string `json:"chartStyle" `
 	Difficulty   string `json:"difficulty" `
@@ -37,6 +39,21 @@ type Song struct {
 	PackName       string          `json:"packName"       db:"name"`
 }
 
+type SongNugget struct {
+	SongId         string          `json:"songId"   db:"songid"`
+	Title          string          `json:"title"    db:"title"`
+	Artist         string          `json:"artist"   db:"artist"`
+	Bpms           []Bpm           `json:"bpms"           `
+	TimeSignatures []TimeSignature `json:"timeSignatures" `
+}
+
+type Pack struct {
+	PackId       string `json:"packId"   db:"packid"`
+	PackName     string `json:"packName" db:"name"`
+	DownloadLink string `json:"downloadLink" db:"download_link"`
+	Songs        []Song `json:"songs"`
+}
+
 type SongResultsResponse struct {
 	Page            int    `json:"pageNum"`
 	PageSize        int    `json:"pageSize"`
@@ -52,9 +69,42 @@ type SongSearchParameters struct {
 	Pack                     string
 	TimeSignatureNumerator   int
 	TimeSignatureDenominator int
-	BpmMin                   float64
-	BpmMax                   float64
+	BpmMin                   int
+	BpmMax                   int
+	MeterMin                 int
+	MeterMax                 int
 	StepsType                string
+}
+
+// for HTML page
+type SongsResultsModel struct {
+	Page             int    `json:"pageNum"`
+	PageSize         int    `json:"pageSize"`
+	PageCount        int    `json:"pageCount"`
+	TotalSongsCount  int    `json:"totalSongsCount"`
+	Songs            []Song `json:"songs"`
+	StepsTypeOptions []string
+	SearchParameters SongSearchParameters
+}
+
+type SongModel struct {
+	Song Song `json:"song"`
+}
+
+func (params SongSearchParameters) AsQueryString() string {
+	return "?title=" + params.Title + "&artist=" + params.Artist + "&credit=" + params.Credit + "&pack=" + params.Pack + "&stepstype=" + params.StepsType + "&timeSignatureNumerator=" + strconv.Itoa(params.TimeSignatureNumerator) + "&timeSignatureDenominator=" + strconv.Itoa(params.TimeSignatureDenominator) + "&bpmMin=" + strconv.Itoa(params.BpmMin) + "&bpmMax=" + strconv.Itoa(params.BpmMax) + "&meterMin=" + strconv.Itoa(params.MeterMin) + "&meterMax=" + strconv.Itoa(params.MeterMax)
+}
+
+func (resultsModel SongsResultsModel) NextPage() int {
+	return resultsModel.Page + 1
+}
+
+func (resultsModel SongsResultsModel) HasNextPage() bool {
+	return resultsModel.Page < resultsModel.PageCount
+}
+
+func (resultsModel SongsResultsModel) PreviousPage() int {
+	return resultsModel.Page - 1
 }
 
 // struct for counting songs

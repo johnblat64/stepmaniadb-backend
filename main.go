@@ -43,10 +43,6 @@ type packAddFromDownloadLinkRequest struct {
 	DownloadLink string `json:"downloadLink"`
 }
 
-type Whatever struct {
-	X []byte `db:"song_chart_json"`
-}
-
 const DEFAULT_COUNT = "20"
 
 func addWhereClausesFromQueryParameters(sb *sqlBuilder.SelectBuilder, c *gin.Context) {
@@ -59,6 +55,10 @@ func addWhereClausesFromQueryParameters(sb *sqlBuilder.SelectBuilder, c *gin.Con
 	if stepsType != "" {
 		sb.Where(sb.E("lower(chart.stepstype)", strings.ToLower(stepsType)))
 	}
+
+	meterMin := c.DefaultQuery("meterMin", "0")
+	meterMax := c.DefaultQuery("meterMax", "99")
+	sb.Where(sb.Between("chart.meter", meterMin, meterMax))
 
 	bpmMin := c.DefaultQuery("bpmMin", "0")
 	bpmMax := c.DefaultQuery("bpmMax", "999")
@@ -213,7 +213,7 @@ func getSongById(c *gin.Context) {
 	songid := c.Param("songid")
 
 	sqlSongSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit ")
+	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit, pack.packid, pack.name ")
 	sqlSongSelectBuilder.From("song")
 	sqlSongSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
 	sqlSongSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
@@ -238,6 +238,38 @@ func getSongById(c *gin.Context) {
 	}
 
 	c.JSON(200, songs[0])
+}
+
+func getPackById(c *gin.Context) {
+	packid := c.Param("packid")
+
+	sqlPackSelectBuilder := sqlBuilder.NewSelectBuilder()
+	sqlPackSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.meter, pack.packid, pack.name, pack.download_link ")
+	sqlPackSelectBuilder.From("song")
+	sqlPackSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
+	sqlPackSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
+	sqlPackSelectBuilder.Join("chart", "chart.songid = song.songid")
+	sqlPackSelectBuilder.Join("song_bpm", "song_bpm.songid = song.songid")
+	sqlPackSelectBuilder.Join("song_time_signature", "song_time_signature.songid = song.songid")
+	sqlPackSelectBuilder.OrderBy("song.title ASC")
+	sqlPackSelectBuilder.Where(sqlPackSelectBuilder.E("pack.packid", packid))
+	sqlPackQuery, args := sqlPackSelectBuilder.BuildWithFlavor(sqlBuilder.PostgreSQL)
+
+	rows, err := gDb.Query(sqlPackQuery, args...)
+	defer rows.Close()
+	if err != nil {
+		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
+	}
+
+	packs := []Pack{}
+
+	err = carta.Map(rows, &packs)
+	if err != nil {
+		gSugar.Errorln(err)
+	}
+
+	c.JSON(200, packs[0])
 }
 
 /**
@@ -280,11 +312,6 @@ func main() {
 	}
 
 	gSugar.Info("Connecting to DB " + dbName + "...")
-
-	// connConfig, err := pgx.ParseConfig("user=" + dbUser + " dbname=" + dbName + " password=" + dbPass + " host=" + dbHost)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
 
 	connStr := "user=" + dbUser + " dbname=" + dbName + " password=" + dbPass + " host=" + dbHost
 	gDb, err = sql.Open("pgx", connStr)
@@ -329,5 +356,6 @@ func main() {
 	// router.POST("example", postExample)
 	router.GET("songs", getFilteredSongs)
 	router.GET("songs/:songid", getSongById)
+	router.GET("packs/:packid", getPackById)
 	router.Run()
 }
