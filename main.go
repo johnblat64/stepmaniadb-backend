@@ -168,7 +168,7 @@ func getFilteredSongs(c *gin.Context) {
 
 	// Main Query
 	sbSongData := sqlBuilder.NewSelectBuilder()
-	sbSongData.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype, chart.description, chart.chartstyle, chart.difficulty, chart.meter, chart.credit, chart.stops_count, chart.delays_count, chart.warps_count, chart.scrolls_count, chart.fakes_count, chart.speeds_count, pack.packid, pack.name")
+	sbSongData.Select("song.songid, song.title, song.artist, song.banner_path, song.music_path, song.file_extension, song.song_dir_path, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype, chart.description, chart.chartstyle, chart.difficulty, chart.meter, chart.credit, chart.stops_count, chart.delays_count, chart.warps_count, chart.scrolls_count, chart.fakes_count, chart.speeds_count, chart.stream, chart.voltage, chart.air, chart.freeze, chart.chaos, pack.packid, pack.name")
 	sbSongData.From(sbSongData.BuilderAs(sbFilteredSongs, "filtered_songs"))
 	sbSongData.Join("song", "filtered_songs.songid = song.songid")
 	sbSongData.Join("song_bpm", "song_bpm.songid = song.songid")
@@ -213,7 +213,7 @@ func getSongById(c *gin.Context) {
 	songid := c.Param("songid")
 
 	sqlSongSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit, pack.packid, pack.name ")
+	sqlSongSelectBuilder.Select("song.songid, song.title, song.artist, song.banner_path, song.music_path, song.song_dir_path, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.chartid, chart.chartname, chart.stepstype,  chart.description, chart.chartstyle,   chart.difficulty, chart.meter, chart.credit, chart.stream, chart.voltage, chart.air, chart.freeze, chart.chaos, pack.packid, pack.name ")
 	sqlSongSelectBuilder.From("song")
 	sqlSongSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
 	sqlSongSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
@@ -244,7 +244,7 @@ func getPackById(c *gin.Context) {
 	packid := c.Param("packid")
 
 	sqlPackSelectBuilder := sqlBuilder.NewSelectBuilder()
-	sqlPackSelectBuilder.Select("song.songid, song.title, song.artist, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.meter, pack.packid, pack.name, pack.download_link ")
+	sqlPackSelectBuilder.Select("song.songid, song.title, song.artist,  song.banner_path, song.music_path, song.song_dir_path, song_bpm.song_bpm, song_time_signature.time_signature_numerator, song_time_signature.time_signature_denominator, chart.meter, pack.packid, pack.name, pack.download_link ")
 	sqlPackSelectBuilder.From("song")
 	sqlPackSelectBuilder.Join("pack_song_map", "pack_song_map.songid = song.songid")
 	sqlPackSelectBuilder.Join("pack", "pack.packid = pack_song_map.packid")
