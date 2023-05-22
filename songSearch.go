@@ -1,13 +1,17 @@
 package main
 
-import "strconv"
+import (
+	"strconv"
+
+	smdbcore "github.com/stepmaniadb/stepmaniadb-core"
+)
 
 type SongResultsResponse struct {
-	Page            int    `json:"pageNum"`
-	PageSize        int    `json:"pageSize"`
-	PageCount       int    `json:"pageCount"`
-	TotalSongsCount int    `json:"totalSongsCount" db:"total_songs_count"`
-	Songs           []Song `json:"songs"`
+	Page            int             `json:"pageNum"`
+	PageSize        int             `json:"pageSize"`
+	PageCount       int             `json:"pageCount"`
+	TotalSongsCount int             `json:"totalSongsCount" db:"total_songs_count"`
+	Songs           []smdbcore.Song `json:"songs"`
 }
 
 type SongSearchParameters struct {
@@ -26,11 +30,11 @@ type SongSearchParameters struct {
 
 // for HTML page
 type SongsResultsModel struct {
-	Page             int    `json:"pageNum"`
-	PageSize         int    `json:"pageSize"`
-	PageCount        int    `json:"pageCount"`
-	TotalSongsCount  int    `json:"totalSongsCount"`
-	Songs            []Song `json:"songs"`
+	Page             int             `json:"pageNum"`
+	PageSize         int             `json:"pageSize"`
+	PageCount        int             `json:"pageCount"`
+	TotalSongsCount  int             `json:"totalSongsCount"`
+	Songs            []smdbcore.Song `json:"songs"`
 	StepsTypeOptions []string
 	SearchParameters SongSearchParameters
 }

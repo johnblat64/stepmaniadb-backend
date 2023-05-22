@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackskj/carta"
+	smdbcore "github.com/stepmaniadb/stepmaniadb-core"
 	"go.uber.org/zap"
 )
 
@@ -65,9 +66,9 @@ func addWhereClausesFromQueryParameters(sb *sqlBuilder.SelectBuilder, c *gin.Con
 
 	sb.Where(sb.Between("song_bpm.song_bpm", bpmMin, bpmMax))
 
-	packTitle := c.Query("pack")
-	if packTitle != "" {
-		sb.Where(sb.Like("lower(pack.title)", "%"+strings.ToLower(packTitle)+"%"))
+	packName := c.Query("pack")
+	if packName != "" {
+		sb.Where(sb.Like("lower(pack.name)", "%"+strings.ToLower(packName)+"%"))
 	}
 
 	timeSignatureNumerator := c.Query("timeSignatureNumerator")
@@ -139,7 +140,7 @@ func getFilteredSongs(c *gin.Context) {
 	addWhereClausesFromQueryParameters(sbCountFilteredSongs, c)
 	countQuery, args := sbCountFilteredSongs.BuildWithFlavor(sqlBuilder.PostgreSQL)
 	// get filteredSongsCount value in filteredSongsCount struct
-	var filteredSongsCount Count
+	var filteredSongsCount smdbcore.Count
 	countRow := gDb.QueryRow(countQuery, args...)
 	err = countRow.Scan(&filteredSongsCount.Count)
 	if err != nil {
@@ -230,7 +231,7 @@ func getSongById(c *gin.Context) {
 		c.Data(500, "application/text", []byte("Internal Server Error"))
 	}
 
-	songs := []Song{}
+	songs := []smdbcore.Song{}
 
 	err = carta.Map(rows, &songs)
 	if err != nil {
@@ -262,7 +263,7 @@ func getPackById(c *gin.Context) {
 		c.Data(500, "application/text", []byte("Internal Server Error"))
 	}
 
-	packs := []Pack{}
+	packs := []smdbcore.Pack{}
 
 	err = carta.Map(rows, &packs)
 	if err != nil {
@@ -325,8 +326,8 @@ func main() {
 
 	err = conn.Raw(func(driverConn any) error {
 		pgxConn := driverConn.(*stdlib.Conn).Conn()
-		var ts TimeSignature
-		var _ts []TimeSignature
+		var ts smdbcore.TimeSignature
+		var _ts []smdbcore.TimeSignature
 		pgtype.NewMap().RegisterDefaultPgType(ts, "timesignature")
 		pgtype.NewMap().RegisterDefaultPgType(_ts, "_timesignature")
 
