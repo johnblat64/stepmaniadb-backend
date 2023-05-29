@@ -73,8 +73,8 @@ func getFilteredSongs(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil {
-		gSugar.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
+		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
 		return
 	}
 	DEFAULT_COUNT := "20"
@@ -83,8 +83,8 @@ func getFilteredSongs(c *gin.Context) {
 	pageSizeStr := c.DefaultQuery("pageSize", DEFAULT_COUNT)
 	pageSize, err := strconv.Atoi(pageSizeStr)
 	if err != nil {
-		gSugar.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
+		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
 		return
 	}
 	if pageSize > MAX_COUNT {
@@ -165,8 +165,8 @@ func getFilteredSongs(c *gin.Context) {
 	err = carta.Map(rows, &songResultsResponse.Songs)
 
 	if err != nil {
-		gSugar.Error(err)
-		c.AbortWithError(http.StatusInternalServerError, err)
+		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
 		return
 	}
 
@@ -192,6 +192,7 @@ func getSongById(c *gin.Context) {
 	if err != nil {
 		gSugar.Errorln(err)
 		c.Data(500, "application/text", []byte("Internal Server Error"))
+		return
 	}
 
 	songs := []smdbcore.Song{}
@@ -199,6 +200,8 @@ func getSongById(c *gin.Context) {
 	err = carta.Map(rows, &songs)
 	if err != nil {
 		gSugar.Errorln(err)
+		c.Data(500, "application/text", []byte("Internal Server Error"))
+		return
 	}
 
 	c.JSON(200, songs[0])
