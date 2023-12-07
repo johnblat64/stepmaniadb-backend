@@ -23,6 +23,13 @@ type DbUserConfig struct {
 	Name     string
 }
 
+type DbEngineType string
+
+const (
+	DbEgninePg      = "pg"
+	DbEngineSqlite3 = "sqlite3"
+)
+
 func main() {
 	var err error
 
@@ -34,6 +41,7 @@ func main() {
 	gSugar = gLogger.Sugar()
 	gSugar.Info("Zap Sugared Logger Initialized")
 
+	var dbEngine DbEngineType
 	var dbUserConfig DbUserConfig
 	var exists bool
 
